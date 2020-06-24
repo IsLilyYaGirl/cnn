@@ -74,6 +74,40 @@ function conv.clampFieldToImageData(field)
 	return i
 end
 
+function conv.fieldClamp01(field)
+	local f = {}
+	local lo, hi = conv.lowestHighestField(field)
+	for y, s in ipairs(field) do
+		f[y] = {}
+		for x, v in ipairs(s) do
+			f[y][x] = clamp01(lo, hi, v)
+		end
+	end
+	return f
+end
+
+function conv.clampFieldRGBToImageData(_r, _g, _b)
+	local i = love.image.newImageData(#_r, #_r[1])
+	local r, g, b = conv.fieldClamp01(_r), conv.fieldClamp01(_g), conv.fieldClamp01(_b)
+	for y, s in ipairs(r) do
+		for x, v in ipairs(s) do
+			i:setPixel(x-1, y-1, v, g[y][x], b[y][x])
+		end
+	end
+	return i
+end
+
+function conv.clampFieldRGBAToImageData(_r, _g, _b, _a)
+	local i = love.image.newImageData(#_r, #_r[1])
+	local r, g, b, a = conv.fieldClamp01(_r), conv.fieldClamp01(_g), conv.fieldClamp01(_b), conv.fieldClamp01(_a)
+	for y, s in ipairs(r) do
+		for x, v in ipairs(s) do
+			i:setPixel(x-1, y-1, v, g[y][x], b[y][x], a[y][x])
+		end
+	end
+	return i
+end
+
 function conv.imageDataToField(img)
 	local f = {}
 	for y=0,img:getHeight()-1 do
@@ -111,21 +145,10 @@ function conv.combineImageData(r, g, b)
 	return img
 end
 
-function conv.fieldClamp01(field)
-	local f = {}
-	local lo, hi = conv.lowestHighestField(field)
-	for y, s in ipairs(field) do
-		f[y] = {}
-		for x, v in ipairs(s) do
-			f[y][x] = clamp01(lo, hi, v)
-		end
-	end
-	return f
-end
-
 function conv.combineFields(...)
 	local args = {...}
 	if #args == 0 then error("hey yo this function needs arguments") end
+	if #args == 1 then return deepCopy(args[1]) end
 	local f = {}
 	for y, s in ipairs(args[1]) do
 		f[y] = {}
@@ -139,6 +162,61 @@ function conv.combineFields(...)
 		end
 	end
 	return f
+end
+
+function conv.mutate(field, min, max)
+	local f = deepCopy(field)
+	for y, s in ipairs(f) do
+		for x, v in ipairs(s) do
+			s[x] = v + (math.random() * (max - min) + min)
+		end
+	end
+	return f
+end
+
+function conv.performMap(field, map)
+	local f = deepCopy(field)
+	for i, v in ipairs(map) do
+		if v[1] == "arr" then
+			local imgs = {}
+			for _i, _v in ipairs(v) do
+				if _v ~= "arr" then
+					table.insert(imgs, conv.applyFilter(f, _v))
+				end
+			end
+			f = conv.combineFields(unpack(imgs))
+		else
+			f = conv.applyFilter(f, v)
+		end
+	end
+	return f
+end
+
+function conv.randomFilter()
+	local s = math.random(2, 5) * 2 - 1
+	local f = {}
+	for y=1,s do
+		f[y] = {}
+		for x=1,s do
+			f[y][x] = math.random()
+		end
+	end
+	return f
+end
+
+function conv.randomFilterMap(length)
+	local m = {}
+	for i=1,length do
+		if math.random(3) == 3 then
+			m[i] = {"arr"}
+			for _i=2,3 do
+				m[i][_i] = conv.randomFilter()
+			end
+		else
+			m[i] = conv.randomFilter()
+		end
+	end
+	return m
 end
 
 return conv

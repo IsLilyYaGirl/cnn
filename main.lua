@@ -2,6 +2,15 @@ local conv = require("conv")
 
 --local field = conv.imageDataToField(love.image.newImageData("dat/field.png"))
 
+local function deepCopy(o)
+	if type(o) ~= "table" then return o end
+	local t = {}
+	for k, v in pairs(o) do
+		t[k] = deepCopy(v)
+	end
+	return t
+end
+
 local field = {}
 
 for y = 1,64 do
@@ -42,6 +51,13 @@ local filter2 = {
 	{-0.2,-0.2,-0.2},
 }
 
+local fm = {
+	filter, filter2, {"arr", filter, filter2}, filter, filter2
+}
+
+local t = conv.performMap(field, conv.randomFilterMap(1))
+
+--[[
 local t = conv.applyFilter(field, filter)
 t = conv.fieldClamp01(t)
 for i=1,20 do
@@ -52,6 +68,7 @@ for i=1,20 do
 	end
 	t = conv.fieldClamp01(t)
 end
+]]
 
 --t = conv.combineFields(t, field)
 
@@ -66,7 +83,7 @@ love.graphics.setDefaultFilter("linear", "nearest")
 
 local _ti = conv.clampFieldToImageData(t)
 
-_ti:encode("png", "convoluteTexture.png")
+--_ti:encode("png", "convoluteTexture3.png")
 
 local fi = love.graphics.newImage(conv.fieldToImageData(field))
 local ti = love.graphics.newImage(_ti)
