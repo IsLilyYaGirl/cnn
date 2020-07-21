@@ -27,9 +27,9 @@ function conv.applyFilter(field, filter)
 				for _x, p in ipairs(i) do
 					local val = 0
 					if field[_y+_yo] == nil then
-						val = 0
+						val = p
 					elseif field[_y+_yo][_x+_xo] == nil then
-						val = 0
+						val = p
 					else
 						val = field[_y+_yo][_x+_xo]*p
 					end
@@ -53,7 +53,7 @@ function conv.lowestHighestField(field)
 end
 
 function conv.fieldToImageData(field)
-	local i = love.image.newImageData(#field, #field[1])
+	local i = love.image.newImageData(#field[1], #field)
 	for y, s in ipairs(field) do
 		for x, v in ipairs(s) do
 			i:setPixel(x-1, y-1, v, v, v)
@@ -63,7 +63,7 @@ function conv.fieldToImageData(field)
 end
 
 function conv.clampFieldToImageData(field)
-	local i = love.image.newImageData(#field, #field[1])
+	local i = love.image.newImageData(#field[1], #field)
 	local lo, hi = conv.lowestHighestField(field)
 	for y, s in ipairs(field) do
 		for x, v in ipairs(s) do
@@ -87,7 +87,7 @@ function conv.fieldClamp01(field)
 end
 
 function conv.clampFieldRGBToImageData(_r, _g, _b)
-	local i = love.image.newImageData(#_r, #_r[1])
+	local i = love.image.newImageData(#_r[1], #_r)
 	local r, g, b = conv.fieldClamp01(_r), conv.fieldClamp01(_g), conv.fieldClamp01(_b)
 	for y, s in ipairs(r) do
 		for x, v in ipairs(s) do
@@ -98,7 +98,7 @@ function conv.clampFieldRGBToImageData(_r, _g, _b)
 end
 
 function conv.clampFieldRGBAToImageData(_r, _g, _b, _a)
-	local i = love.image.newImageData(#_r, #_r[1])
+	local i = love.image.newImageData(#_r[1], #_r)
 	local r, g, b, a = conv.fieldClamp01(_r), conv.fieldClamp01(_g), conv.fieldClamp01(_b), conv.fieldClamp01(_a)
 	for y, s in ipairs(r) do
 		for x, v in ipairs(s) do
@@ -133,6 +133,20 @@ function conv.splitImageData(img)
 	return r, g, b
 end
 
+function conv.splitImageDataAlpha(img)
+	local r, g, b, a = love.image.newImageData(img:getWidth(), img:getHeight()), love.image.newImageData(img:getWidth(), img:getHeight()), love.image.newImageData(img:getWidth(), img:getHeight()), love.image.newImageData(img:getWidth(), img:getHeight())
+	for x=0,img:getWidth()-1 do
+		for y=0,img:getHeight()-1 do
+			local pr, pg, pb, pa = img:getPixel(x, y)
+			r:setPixel(x, y, pr, pr, pr)
+			g:setPixel(x, y, pg, pg, pg)
+			b:setPixel(x, y, pb, pb, pb)
+			a:setPixel(x, y, pa, pa, pa)
+		end
+	end
+	return r, g, b, a
+end
+
 function conv.combineImageData(r, g, b)
 	local img = love.image.newImageData(r:getWidth(), r:getHeight())
 	for x=0,r:getWidth()-1 do
@@ -140,6 +154,18 @@ function conv.combineImageData(r, g, b)
 			local rp, gp, bp = {r:getPixel(x, y)}, {g:getPixel(x, y)}, {b:getPixel(x, y)}
 			local rv, gv, bv = (rp[1] + rp[2] + rp[3]) / 3, (gp[1] + gp[2] + gp[3]) / 3, (bp[1] + bp[2] + bp[3]) / 3
 			img:setPixel(x, y, rv, gv, bv)
+		end
+	end
+	return img
+end
+
+function conv.combineImageDataAlpha(r, g, b, a)
+	local img = love.image.newImageData(r:getWidth(), r:getHeight())
+	for x=0,r:getWidth()-1 do
+		for y=0,r:getHeight()-1 do
+			local rp, gp, bp, ap = {r:getPixel(x, y)}, {g:getPixel(x, y)}, {b:getPixel(x, y)}, {a:getPixel(x, y)}
+			local rv, gv, bv, av = (rp[1] + rp[2] + rp[3]) / 3, (gp[1] + gp[2] + gp[3]) / 3, (bp[1] + bp[2] + bp[3]) / 3, (ap[1] + ap[2] + ap[3]) / 3
+			img:setPixel(x, y, rv, gv, bv, av)
 		end
 	end
 	return img
@@ -162,6 +188,10 @@ function conv.combineFields(...)
 		end
 	end
 	return f
+end
+
+function conv.copy(o)
+	return deepCopy(o)
 end
 
 function conv.mutate(field, min, max)
@@ -192,6 +222,24 @@ function conv.performMap(field, map)
 	return f
 end
 
+function conv.mutateMap(map, min, max)
+	local m = deepCopy(map)
+	for i, v in ipairs(map) do
+		if v[1] == "arr" then
+			local flts = {}
+			for _i, _v in ipairs(v) do
+				if _v ~= "arr" then
+					table.insert(flts, conv.mutate(_v, min, max))
+				end
+			end
+			m[i] = {"arr", unpack(flts)}
+		else
+			m[i] = conv.mutate(v, min, max)
+		end
+	end
+	return m
+end
+
 function conv.randomFilter()
 	local s = math.random(2, 5) * 2 - 1
 	local f = {}
@@ -217,6 +265,38 @@ function conv.randomFilterMap(length)
 		end
 	end
 	return m
+end
+
+function conv.sum(f)
+	local n = 0
+	for y, s in ipairs(f) do
+		for x, v in ipairs(s) do
+			n = n + v
+		end
+	end
+	return n
+end
+
+function conv.avg(f)
+	local n = 0
+	local d = 0
+	for y, s in ipairs(f) do
+		for x, v in ipairs(s) do
+			n = n + v
+			d = d + 1
+		end
+	end
+	return n / d
+end
+
+function conv.loss(f1, f2)
+	local ploss = 0
+	for y, s in ipairs(f1) do
+		for x, v in ipairs(s) do
+			ploss = ploss + math.abs(v - f2[y][x])
+		end
+	end
+	return math.abs(conv.avg(f1) - conv.avg(f2)) + math.abs(conv.sum(f1) - conv.sum(f2)) + ploss
 end
 
 return conv
